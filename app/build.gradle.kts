@@ -31,11 +31,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -64,6 +64,14 @@ dependencies {
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.7.0")
 
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.1.0")
+
+    // Encrypted SharedPreferences for secure PIN storage
+    implementation("androidx.security:security-crypto:1.0.0")
+
+    // Optional: WorkManager (in case we later want it instead of AlarmManager)
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -24,6 +24,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.anima.ui.screens.DailyEntryScreen
 import com.example.anima.ui.screens.CalendarScreen
+import com.example.anima.ui.screens.SettingsScreen
 import com.example.anima.viewmodel.DailyViewModel
 
 class MainActivity : ComponentActivity() {
@@ -56,6 +57,10 @@ fun AppContent(modifier: Modifier = Modifier) {
             Button(onClick = { navController.navigate("calendar") }) {
                 Text("Calendario")
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = { navController.navigate("settings") }) {
+                Text("Ajustes")
+            }
         }
 
         NavHost(navController = navController, startDestination = "daily") {
@@ -64,6 +69,9 @@ fun AppContent(modifier: Modifier = Modifier) {
             }
             composable("calendar") {
                 CalendarScreen(viewModel = vm)
+            }
+            composable("settings") {
+                SettingsScreen()
             }
         }
     }
