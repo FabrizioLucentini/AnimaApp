@@ -1,10 +1,17 @@
 package com.example.anima.util
 
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
 object DateUtils {
     private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+
+    val formatter = SimpleDateFormat("d 'de' MMMM", Locale("es", "ES"))
+
+    // Formatter for month + year, e.g. "noviembre 2025" in Spanish
+    private val monthYearFormatter = SimpleDateFormat("MMMM yyyy", Locale("es", "ES"))
 
     /** Returns epoch day (days since 1970-01-01) for today's local date. */
     fun todayEpochDay(): Long {
@@ -47,5 +54,14 @@ object DateUtils {
         val end = Math.floorDiv(cal.timeInMillis, MILLIS_PER_DAY)
 
         return start to end
+    }
+
+    /** Return localized "MMMM yyyy" for a given year and 1-based month (1..12) */
+    fun formatMonthYear(year: Int, month: Int): String {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.YEAR, year)
+        cal.set(Calendar.MONTH, month - 1)
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        return monthYearFormatter.format(cal.time)
     }
 }

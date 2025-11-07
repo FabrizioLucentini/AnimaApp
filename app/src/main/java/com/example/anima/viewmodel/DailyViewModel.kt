@@ -20,24 +20,29 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
     val currentEntry: StateFlow<DailyEntry?> = _currentEntry
 
     init {
-        ensureTodayEntry()
-    }
-
-    fun ensureTodayEntry() {
+        // initialize today's entry asynchronously
         viewModelScope.launch {
-            val today = DateUtils.todayEpochDay()
-            val existing = repo.getByDate(today)
-            if (existing == null) {
-                val entry = DailyEntry(date = today)
-                val id = repo.insert(entry)
-                _currentEntry.value = entry.copy(id = id)
-            } else {
-                _currentEntry.value = existing
-            }
+            loadEntryForDate(DateUtils.todayEpochDay())
         }
     }
 
-    fun updateMoodAndNote(mood: Int?, note: String?, onSaved: (() -> Unit)? = null) {
+    // Now a suspending function that returns the loaded or created entry.
+    suspend fun loadEntryForDate(epochDay: Long): DailyEntry? {
+        val existing = repo.getByDate(epochDay)
+        if (existing == null) {
+            val entry = DailyEntry(date = epochDay)
+            val id = repo.insert(entry)
+            val created = entry.copy(id = id)
+            _currentEntry.value = created
+            return created
+        } else {
+            _currentEntry.value = existing
+            return existing
+        }
+    }
+
+    // Accept a suspending onSaved callback so callers can await suspending work (e.g. loading another entry)
+    fun updateMoodAndNote(mood: Int?, note: String?, onSaved: (suspend () -> Unit)? = null) {
         viewModelScope.launch {
             val entry = _currentEntry.value
             if (entry != null) {
@@ -53,6 +58,7 @@ class DailyViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+                // invoke suspending onSaved if provided
                 onSaved?.invoke()
             }
         }

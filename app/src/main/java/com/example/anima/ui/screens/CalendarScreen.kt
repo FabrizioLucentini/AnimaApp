@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,26 +20,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.anima.data.model.DailyEntry
-import com.example.anima.viewmodel.DailyViewModel
 import com.example.anima.util.DateUtils
 import com.example.anima.util.MoodColor
+import com.example.anima.viewmodel.DailyViewModel
 import java.util.Calendar
 
 @Composable
-fun CalendarScreen(viewModel: DailyViewModel) {
+fun CalendarScreen(viewModel: DailyViewModel, onEdit: (Long) -> Unit = {}) {
     var entries by remember { mutableStateOf<List<DailyEntry>>(emptyList()) }
     val todayEpoch = DateUtils.todayEpochDay()
     val todayCal = DateUtils.calendarForEpochDay(todayEpoch)
     var displayedYear by remember { mutableStateOf(todayCal.get(Calendar.YEAR)) }
     var displayedMonth by remember { mutableStateOf(todayCal.get(Calendar.MONTH) + 1) } // 1..12
+    var selectedEpochDay by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(displayedYear, displayedMonth) {
         entries = viewModel.getEntriesForMonth(displayedYear, displayedMonth)
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
                 // go to previous month
@@ -48,7 +53,12 @@ fun CalendarScreen(viewModel: DailyViewModel) {
             }) { Text("<") }
 
             Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Calendario - $displayedMonth/$displayedYear", modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            val headerLabel = DateUtils.formatMonthYear(displayedYear, displayedMonth)
+            Text(
+                text = headerLabel,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 // next month
@@ -83,20 +93,23 @@ fun CalendarScreen(viewModel: DailyViewModel) {
                         val cellIndex = r * 7 + c
                         val dayNumber = cellIndex - leadingBlanks + 1
                         if (cellIndex < leadingBlanks || dayNumber > daysInMonth) {
-                            Box(modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                            )
                         } else {
                             val epochDay = firstDay + (dayNumber - 1)
-                            val mood = moodMap[epochDay]?.mood
+                            val entry = moodMap[epochDay]
                             Box(modifier = Modifier
                                 .weight(1f)
                                 .height(40.dp)
                                 .padding(2.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(MoodColor.colorFor(mood))
+                                .background(MoodColor.colorFor(entry?.mood))
                                 .clickable {
-                                    // optionally navigate or handle click
+                                    // Select the day to show its note in a popup. Editing is done via the "Editar" button.
+                                    selectedEpochDay = epochDay
                                 }, contentAlignment = Alignment.Center) {
                                 Text(text = dayNumber.toString(), fontSize = 12.sp, textAlign = TextAlign.Center)
                             }
@@ -107,6 +120,41 @@ fun CalendarScreen(viewModel: DailyViewModel) {
             }
         }
 
+        // Show popup card for the selected day (if any)
+        if (selectedEpochDay != null) {
+            val sel = selectedEpochDay!!
+            val selectedEntry = entries.firstOrNull { it.date == sel }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                tonalElevation = 4.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Nota del ${DateUtils.formatter.format(DateUtils.calendarForEpochDay(sel).time)}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = selectedEntry?.note ?: "No hay nota para este día.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { selectedEpochDay = null }) {
+                            Text("Cerrar")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(onClick = {
+                            // Delegate edit action to the caller; the caller can load/create the entry and navigate.
+                            onEdit(sel)
+                            selectedEpochDay = null
+                        }) {
+                            Text("Editar")
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Draw a simple line chart for mood over the month
@@ -114,10 +162,14 @@ fun CalendarScreen(viewModel: DailyViewModel) {
         if (moodEntries.size < 2) {
             Text(text = "No hay suficientes datos para graficar")
         } else {
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)) {
-                Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            ) {
+                Canvas(modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)) {
                     val left = 20f
                     val right = size.width - 8f
                     val top = 8f
@@ -128,7 +180,8 @@ fun CalendarScreen(viewModel: DailyViewModel) {
                     // build path
                     val path = Path()
                     moodEntries.forEachIndexed { idx, entry ->
-                        val xRatio = (entry.date - firstDay).toFloat() / (daysInMonth - 1).coerceAtLeast(1).toFloat()
+                        val xRatio =
+                            (entry.date - firstDay).toFloat() / (daysInMonth - 1).coerceAtLeast(1).toFloat()
                         val x = left + xRatio * usableW
                         val yRatio = (entry.mood!! - 1f) / 9f // 0..1
                         val y = top + (1f - yRatio) * usableH
@@ -140,7 +193,8 @@ fun CalendarScreen(viewModel: DailyViewModel) {
 
                     // draw points
                     moodEntries.forEach { entry ->
-                        val xRatio = (entry.date - firstDay).toFloat() / (daysInMonth - 1).coerceAtLeast(1).toFloat()
+                        val xRatio =
+                            (entry.date - firstDay).toFloat() / (daysInMonth - 1).coerceAtLeast(1).toFloat()
                         val x = left + xRatio * usableW
                         val yRatio = (entry.mood!! - 1f) / 9f
                         val y = top + (1f - yRatio) * usableH

@@ -3,22 +3,28 @@
 
     <!-- Permission to receive boot completed so we can reschedule alarms -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Permission to post notifications on Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Allow scheduling exact alarms on platforms that require it -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Anima">
 
         <activity
-            android:name=".LockActivity"
             android:exported="true"
+            android:name=".LockActivity"
             android:theme="@style/Theme.Anima">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
@@ -28,7 +34,8 @@
             android:exported="true"
             android:theme="@style/Theme.Anima" />
 
-        <receiver android:name="com.example.anima.util.NotificationReceiver" android:exported="false" />
+        <!-- Allow system to deliver AlarmManager broadcasts to this receiver -->
+        <receiver android:name="com.example.anima.util.NotificationReceiver" android:exported="true" />
 
         <receiver android:name="com.example.anima.util.BootReceiver" android:exported="true" android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>

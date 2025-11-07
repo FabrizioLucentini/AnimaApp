@@ -25,6 +25,7 @@ class SecurePrefs(context: Context) {
         private const val KEY_PIN = "pin"
         private const val KEY_FAILED_ATTEMPTS = "failed_attempts"
         private const val KEY_LOCK_UNTIL = "lock_until"
+        private const val KEY_LAST_REMINDER_FIRED = "last_reminder_fired"
     }
 
     fun getThemeMode(): Int = prefs.getInt(KEY_THEME_MODE, 0)
@@ -56,4 +57,8 @@ class SecurePrefs(context: Context) {
 
     fun getLockUntil(): Long = prefs.getLong(KEY_LOCK_UNTIL, 0L)
     fun setLockUntil(untilMs: Long) = prefs.edit { putLong(KEY_LOCK_UNTIL, untilMs) }
+
+    // Record when the last reminder notification was fired (epoch millis)
+    fun setLastReminderFired(ts: Long) = prefs.edit { putLong(KEY_LAST_REMINDER_FIRED, ts) }
+    fun getLastReminderFired(): Long = prefs.getLong(KEY_LAST_REMINDER_FIRED, 0L)
 }

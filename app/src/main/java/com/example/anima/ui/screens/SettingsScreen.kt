@@ -1,10 +1,11 @@
 package com.example.anima.ui.screens
 
 import android.Manifest
-import android.app.TimePickerDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
+import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -17,20 +18,13 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.example.anima.util.AlarmHelper
 import com.example.anima.util.SecurePrefs
-import java.util.Calendar
+import android.provider.Settings
+import androidx.core.net.toUri
 
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val prefs = SecurePrefs(context)
-
-    val notificationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted: Boolean ->
-        if (!granted) {
-            Toast.makeText(context, "Permiso de notificaciones denegado. No se programará el recordatorio.", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     var reminderEnabled by remember { mutableStateOf(prefs.isReminderEnabled()) }
     var hour by remember { mutableStateOf(prefs.getReminderHour()) }
@@ -39,6 +33,49 @@ fun SettingsScreen() {
     var themeMode by remember { mutableStateOf(prefs.getThemeMode()) }
     var newPin by remember { mutableStateOf("") }
     var newPinConfirm by remember { mutableStateOf("") }
+    // UI state to show explanatory dialogs for permissions/settings
+    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
+    var showExactAlarmsDialog by remember { mutableStateOf(false) }
+    // helper to open notification settings for older devices
+    val openNotificationSettings = {
+        try {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = "package:${context.packageName}".toUri()
+                }
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Throwable) {
+            // silent fail: avoid debug logs in production UI
+            Toast.makeText(context, "No se pudo abrir ajustes de notificaciones: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // register permission launcher after state so callback can access current values
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted: Boolean ->
+        if (!granted) {
+            Toast.makeText(context, "Permiso de notificaciones denegado. No se programará el recordatorio.", Toast.LENGTH_SHORT).show()
+        } else {
+            // If the user granted permission and the user currently wants reminders enabled,
+            // schedule the reminder now.
+            if (reminderEnabled) {
+                try {
+                    AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
+                    Toast.makeText(context, "Recordatorio programado", Toast.LENGTH_SHORT).show()
+                } catch (t: Throwable) {
+                    // ignore detailed debug log
+                    Toast.makeText(context, "No se pudo programar el recordatorio: ${t.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -46,6 +83,7 @@ fun SettingsScreen() {
             .padding(16.dp),
         horizontalAlignment = Alignment.Start
     ) {
+        // diagnostics removed for production
         Text("Recordatorio", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -74,39 +112,114 @@ fun SettingsScreen() {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Button(onClick = {
-            prefs.setReminderEnabled(reminderEnabled)
-            prefs.setReminderHour(hour)
-            prefs.setReminderMinute(minute)
-            prefs.setReminderMessage(message.text)
+            try {
+                prefs.setReminderEnabled(reminderEnabled)
+                prefs.setReminderHour(hour)
+                prefs.setReminderMinute(minute)
+                prefs.setReminderMessage(message.text)
 
-            // On Android 13+ request POST_NOTIFICATIONS permission before scheduling
-            if (reminderEnabled) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                    if (!granted) {
-                        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        // user will decide; don't schedule until permission result or they re-save
-                        Toast.makeText(context, "Solicitando permiso de notificaciones... Vuelva a guardar para programar si concede permiso.", Toast.LENGTH_LONG).show()
+                // On Android 13+ request POST_NOTIFICATIONS permission before scheduling
+                if (reminderEnabled) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                        if (!granted) {
+                            // show a dialog explaining why we need notification permission; launcher will be invoked if user accepts
+                            showNotificationPermissionDialog = true
+                            // user will decide in the dialog; don't schedule until permission result or they re-save
+                        } else {
+                            try {
+                                AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
+                                Toast.makeText(context, "Recordatorio programado", Toast.LENGTH_SHORT).show()
+                                // (test notification removed to avoid instant notification on save)
+                            } catch (t: Throwable) {
+                                // ignore detailed debug log
+                                Toast.makeText(context, "No se pudo programar el recordatorio: ${t.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     } else {
-                        AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
+                        try {
+                            AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
+                            Toast.makeText(context, "Recordatorio programado", Toast.LENGTH_SHORT).show()
+                            // (test notification removed to avoid instant notification on save)
+                        } catch (t: Throwable) {
+                            // ignore detailed debug log
+                            Toast.makeText(context, "No se pudo programar el recordatorio: ${t.message}", Toast.LENGTH_LONG).show()
+                        }
                     }
                 } else {
-                    AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
+                    try {
+                        AlarmHelper.cancelReminder(context)
+                    } catch (t: Throwable) {
+                        // ignore detailed debug log
+                        Toast.makeText(context, "No se pudo cancelar el recordatorio: ${t.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
-            } else {
-                AlarmHelper.cancelReminder(context)
-            }
 
-            if (reminderEnabled) {
-                // if already scheduled above it was scheduled; otherwise a toast informs the user
+                Toast.makeText(context, "Recordatorio configurado correctamente", Toast.LENGTH_SHORT).show()
+            } catch (e: Throwable) {
+                Toast.makeText(context, "Error al guardar recordatorio: ${e.message}", Toast.LENGTH_LONG).show()
             }
-            Toast.makeText(context, "Recordatorio configurado correctamente", Toast.LENGTH_SHORT).show()
         }) {
             Text("Guardar recordatorio")
         }
 
+        // Notification permission explanatory dialog
+        if (showNotificationPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showNotificationPermissionDialog = false },
+                title = { Text("Permisos para recordatorios y notificaciones") },
+                text = { Text("La aplicación necesita permiso para mostrar notificaciones (para recordatorios) y, según la versión de Android, permiso para programar alarmas exactas. ¿Desea conceder estos permisos ahora?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showNotificationPermissionDialog = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            openNotificationSettings()
+                        }
+                    }) { Text("Abrir") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showNotificationPermissionDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        // Exact alarms explanatory dialog
+        if (showExactAlarmsDialog) {
+            AlertDialog(
+                onDismissRequest = { showExactAlarmsDialog = false },
+                title = { Text("Permiso para alarmas (recordatorios exactos)") },
+                text = { Text("La aplicación necesita permiso para programar alarmas exactas para que los recordatorios se disparen a la hora correcta. ¿Desea abrir los ajustes para permitirlo?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showExactAlarmsDialog = false
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val intentSettings = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                                context.startActivity(intentSettings)
+                            } else {
+                                // fallback: open app details settings so user can inspect permissions
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = "package:${context.packageName}".toUri()
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                         } catch (ex: Throwable) {
+                             // ignore detailed debug log
+                             Toast.makeText(context, "No se pudo abrir ajustes de alarmas exactas: ${ex.message}", Toast.LENGTH_LONG).show()
+                         }
+                    }) { Text("Abrir ajustes") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExactAlarmsDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         Text("Seguridad", style = MaterialTheme.typography.titleMedium)
@@ -127,7 +240,7 @@ fun SettingsScreen() {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         Text("Apariencia", style = MaterialTheme.typography.titleMedium)

@@ -1,23 +1,53 @@
 package com.example.anima.util
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
+import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 
 class NotificationReceiver : BroadcastReceiver() {
     companion object {
         const val CHANNEL_ID = "anima_reminder_channel"
+        const val ACTION_REMIND = "com.example.anima.action.REMIND"
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
+        Log.d("NotificationReceiver", "onReceive called, intent=${intent}")
         val msg = intent?.getStringExtra("msg") ?: "¿Cómo te sentís hoy?"
         createChannelIfNeeded(context)
+
+        // Record last fired timestamp for diagnostics
+        try {
+            val prefs = SecurePrefs(context)
+            prefs.setLastReminderFired(System.currentTimeMillis())
+        } catch (t: Throwable) {
+            Log.w("NotificationReceiver", "Failed to record last fired timestamp", t)
+        }
+
+        // Optional visual confirmation for debugging (a short toast)
+        try {
+            Toast.makeText(context, "Recordatorio: $msg", Toast.LENGTH_SHORT).show()
+        } catch (t: Throwable) {
+            // ignore to avoid crashing receiver
+            Log.w("NotificationReceiver", "Failed to show toast in receiver", t)
+        }
+
+        // Check notification permission on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                Log.w("NotificationReceiver", "POST_NOTIFICATIONS not granted; skipping notify")
+                return
+            }
+        }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -26,8 +56,13 @@ class NotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
-        with(NotificationManagerCompat.from(context)) {
-            notify(1000, builder.build())
+        try {
+            with(NotificationManagerCompat.from(context)) {
+                notify(1000, builder.build())
+                Log.d("NotificationReceiver", "Notification posted (id=1000)")
+            }
+        } catch (t: Throwable) {
+            Log.e("NotificationReceiver", "Failed to post notification", t)
         }
 
         // Schedule next day to keep it daily (because we used exact alarm for a single trigger)
@@ -39,10 +74,11 @@ class NotificationReceiver : BroadcastReceiver() {
                     val h = prefs.getReminderHour()
                     val m = prefs.getReminderMinute()
                     val message = prefs.getReminderMessage()
+                    Log.d("NotificationReceiver", "Rescheduling next reminder for ${h}:${m}")
                     AlarmHelper.scheduleDailyReminder(context, h, m, message)
                 }
             } catch (t: Throwable) {
-                // ignore
+                Log.e("NotificationReceiver", "Error rescheduling reminder", t)
             }
         }
     }
@@ -58,7 +94,7 @@ class NotificationReceiver : BroadcastReceiver() {
             val notificationManager: NotificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+            Log.d("NotificationReceiver", "Notification channel created/ensured: $CHANNEL_ID")
         }
     }
 }
-

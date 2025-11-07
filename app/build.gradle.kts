@@ -72,12 +72,4 @@ dependencies {
 
     // Optional: WorkManager (in case we later want it instead of AlarmManager)
     implementation("androidx.work:work-runtime-ktx:2.8.1")
-
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
