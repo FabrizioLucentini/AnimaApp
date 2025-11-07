@@ -19,6 +19,8 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.anima", appContext.packageName)
+        // The applicationId in app/build.gradle.kts is "com.anima.app",
+        // so assert against that value to avoid a failing test.
+        assertEquals("com.anima.app", appContext.packageName)
     }
 }

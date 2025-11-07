@@ -52,6 +52,20 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
+    // Test dependencies
+    testImplementation("junit:junit:4.13.2")
+    // Ensure kapt can resolve JUnit annotations when generating test stubs
+    kaptTest("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+
+    // Ensure test annotations are available to kapt when generating androidTest stubs
+    // This helps avoid `error.NonExistentClass` in kapt-generated stubs for androidTest.
+    kaptAndroidTest("androidx.test.ext:junit:1.1.5")
+    kaptAndroidTest("androidx.test:runner:1.5.2")
+
     // Room (explicit coordinates)
     implementation("androidx.room:room-runtime:2.8.3")
     implementation("androidx.room:room-ktx:2.8.3")
@@ -72,4 +86,18 @@ dependencies {
 
     // Optional: WorkManager (in case we later want it instead of AlarmManager)
     implementation("androidx.work:work-runtime-ktx:2.8.1")
+}
+
+// Add a convenience task to copy/rename the assembled debug APK to anima.apk
+// Usage: .\gradlew.bat copyDebugApkToAnima
+tasks.register<Copy>("copyDebugApkToAnima") {
+    // Ensure the debug APK is built first
+    dependsOn("assembleDebug")
+
+    val apkDir = layout.buildDirectory.dir("outputs/apk/debug")
+    from(apkDir)
+    include("app-debug.apk")
+    into(apkDir)
+    // Rename the output file
+    rename("app-debug.apk", "anima.apk")
 }
