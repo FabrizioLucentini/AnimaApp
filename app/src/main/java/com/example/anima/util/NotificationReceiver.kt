@@ -13,6 +13,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
+import android.app.PendingIntent
 
 class NotificationReceiver : BroadcastReceiver() {
     companion object {
@@ -55,6 +56,23 @@ class NotificationReceiver : BroadcastReceiver() {
             .setContentText(msg)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+
+        // Make notification clickable: open the app's launch activity when tapped
+        try {
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            if (launchIntent != null) {
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                val pending = PendingIntent.getActivity(
+                    context,
+                    0,
+                    launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(pending)
+            }
+        } catch (t: Throwable) {
+            // ignore; notification will still post without click action
+        }
 
         try {
             with(NotificationManagerCompat.from(context)) {

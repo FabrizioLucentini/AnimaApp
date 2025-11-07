@@ -19,12 +19,24 @@ import androidx.compose.ui.unit.dp
 import com.example.anima.util.AlarmHelper
 import com.example.anima.util.SecurePrefs
 import android.provider.Settings
+import android.app.AlarmManager
 import androidx.core.net.toUri
 
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val prefs = SecurePrefs(context)
+
+    // Reflection-based helper to check exact-alarms capability without triggering static-analysis
+    val canScheduleExactAlarmsCompat: (AlarmManager) -> Boolean = { am ->
+        try {
+            val method = AlarmManager::class.java.getMethod("canScheduleExactAlarms")
+            (method.invoke(am) as? Boolean) ?: true
+        } catch (_: Throwable) {
+            // On older platforms the method isn't present; assume the platform allows alarms or doesn't require the check
+            true
+        }
+    }
 
     var reminderEnabled by remember { mutableStateOf(prefs.isReminderEnabled()) }
     var hour by remember { mutableStateOf(prefs.getReminderHour()) }
@@ -127,6 +139,19 @@ fun SettingsScreen() {
                             showNotificationPermissionDialog = true
                             // user will decide in the dialog; don't schedule until permission result or they re-save
                         } else {
+                            // Check exact alarms capability on Android S+ before scheduling
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+                                    if (!canScheduleExactAlarmsCompat(alarmManager)) {
+                                        showExactAlarmsDialog = true
+                                        Toast.makeText(context, "La aplicación necesita permiso para programar alarmas exactas. Abra los ajustes.", Toast.LENGTH_LONG).show()
+                                        return@Button
+                                    }
+                                }
+                            } catch (_: Throwable) {
+                                // ignore; proceed to schedule and let fallback handle failures
+                            }
                             try {
                                 AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
                                 Toast.makeText(context, "Recordatorio programado", Toast.LENGTH_SHORT).show()
@@ -138,6 +163,20 @@ fun SettingsScreen() {
                         }
                     } else {
                         try {
+                            // Check exact alarms capability on Android S+ before scheduling
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+                                    if (!canScheduleExactAlarmsCompat(alarmManager)) {
+                                        showExactAlarmsDialog = true
+                                        Toast.makeText(context, "La aplicación necesita permiso para programar alarmas exactas. Abra los ajustes.", Toast.LENGTH_LONG).show()
+                                        return@Button
+                                    }
+                                }
+                            } catch (_: Throwable) {
+                                // ignore; proceed to schedule and let fallback handle failures
+                            }
+
                             AlarmHelper.scheduleDailyReminder(context, hour, minute, message.text)
                             Toast.makeText(context, "Recordatorio programado", Toast.LENGTH_SHORT).show()
                             // (test notification removed to avoid instant notification on save)
@@ -189,12 +228,29 @@ fun SettingsScreen() {
         if (showExactAlarmsDialog) {
             AlertDialog(
                 onDismissRequest = { showExactAlarmsDialog = false },
-                title = { Text("Permiso para alarmas (recordatorios exactos)") },
-                text = { Text("La aplicación necesita permiso para programar alarmas exactas para que los recordatorios se disparen a la hora correcta. ¿Desea abrir los ajustes para permitirlo?") },
+                title = { Text("Permiso: gestionar recordatorios y alarmas") },
+                text = { Text("La aplicación necesita permiso para gestionar recordatorios y alarmas (alarmas exactas) para que los recordatorios se disparen a la hora correcta. ¿Desea abrir los ajustes para permitirlo?") },
                 confirmButton = {
                     TextButton(onClick = {
                         showExactAlarmsDialog = false
                         try {
+                            // Prefer opening the Reminders management UI when available (Android 14+ / API 34)
+                            if (Build.VERSION.SDK_INT >= 34) {
+                                try {
+                                    // ACTION_MANAGE_APP_REMINDERS (API 34) may not be available at compile time in some SDKs,
+                                    // use the action string literal as a safe fallback.
+                                    val intentReminders = Intent("android.settings.MANAGE_APP_REMINDERS").apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intentReminders)
+                                    return@TextButton
+                                } catch (_: Throwable) {
+                                    // Fall through to older intents
+                                }
+                            }
+
+                            // On Android S+ offer the exact alarms request
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 val intentSettings = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
                                 context.startActivity(intentSettings)

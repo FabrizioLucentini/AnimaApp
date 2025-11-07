@@ -20,7 +20,7 @@
 
         <activity
             android:exported="true"
-            android:name=".LockActivity"
+            android:name="com.example.anima.LockActivity"
             android:theme="@style/Theme.Anima">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -30,12 +30,12 @@
         </activity>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.anima.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Anima" />
 
-        <!-- Allow system to deliver AlarmManager broadcasts to this receiver -->
-        <receiver android:name="com.example.anima.util.NotificationReceiver" android:exported="true" />
+        <!-- NotificationReceiver is triggered by app-created PendingIntent; keep it non-exported for safety -->
+        <receiver android:name="com.example.anima.util.NotificationReceiver" android:exported="false" />
 
         <receiver android:name="com.example.anima.util.BootReceiver" android:exported="true" android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
             <intent-filter>

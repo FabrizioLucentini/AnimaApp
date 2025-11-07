@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.anima"
+    namespace = "com.anima.app"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.anima"
+        applicationId = "com.anima.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
